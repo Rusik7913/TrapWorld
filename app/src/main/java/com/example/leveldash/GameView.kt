@@ -11,26 +11,22 @@ import kotlin.math.min
 class GameView(ctx: Context) : View(ctx) {
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val prefs = ctx.getSharedPreferences("save", Context.MODE_PRIVATE)
 
     private var screen = 0
     private var level = 1
     private var character = 0
     private var deaths = 0
 
-    private var playerX = 100f
+    private var playerX = 80f
     private var playerY = 0f
     private var velocityY = 0f
 
     private var initialized = false
-    private var gameRunning = false
 
     private val names = arrayOf(
-        "NOVA",
-        "BOLT",
-        "MINT",
-        "SHADOW",
-        "ROBO",
-        "FLARE"
+        "NOVA", "BOLT", "MINT",
+        "SHADOW", "ROBO", "FLARE"
     )
 
     private val colors = intArrayOf(
@@ -45,13 +41,8 @@ class GameView(ctx: Context) : View(ctx) {
     private val platforms = mutableListOf<RectF>()
     private val spikes = mutableListOf<RectF>()
 
-    private val prefs =
-        ctx.getSharedPreferences("save", Context.MODE_PRIVATE)
-
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-
-        canvas.drawColor(Color.rgb(8, 8, 18))
 
         when (screen) {
             0 -> drawMenu(canvas)
@@ -67,7 +58,7 @@ class GameView(ctx: Context) : View(ctx) {
 
     private fun drawText(
         canvas: Canvas,
-        text: String,
+        value: String,
         x: Float,
         y: Float,
         size: Float,
@@ -81,26 +72,32 @@ class GameView(ctx: Context) : View(ctx) {
         paint.textAlign =
             if (center) Paint.Align.CENTER else Paint.Align.LEFT
 
-        canvas.drawText(text, x, y, paint)
+        canvas.drawText(value, x, y, paint)
     }
 
-    private fun drawButton(
+    private fun button(
         canvas: Canvas,
         rect: RectF,
         color: Int,
-        text: String,
-        textSize: Float
+        title: String,
+        size: Float
     ) {
         paint.style = Paint.Style.FILL
         paint.color = color
-        canvas.drawRoundRect(rect, 18f, 18f, paint)
+
+        canvas.drawRoundRect(
+            rect,
+            18f,
+            18f,
+            paint
+        )
 
         drawText(
             canvas,
-            text,
+            title,
             rect.centerX(),
-            rect.centerY() + textSize / 3f,
-            textSize,
+            rect.centerY() + size / 3f,
+            size,
             Color.WHITE,
             true
         )
@@ -108,6 +105,8 @@ class GameView(ctx: Context) : View(ctx) {
 
     private fun drawMenu(canvas: Canvas) {
         val w = width.toFloat()
+
+        canvas.drawColor(Color.rgb(8, 8, 18))
 
         drawText(
             canvas,
@@ -129,7 +128,7 @@ class GameView(ctx: Context) : View(ctx) {
             true
         )
 
-        drawButton(
+        button(
             canvas,
             RectF(
                 w / 2f - 180f,
@@ -142,7 +141,7 @@ class GameView(ctx: Context) : View(ctx) {
             30f
         )
 
-        drawButton(
+        button(
             canvas,
             RectF(
                 w / 2f - 180f,
@@ -155,7 +154,7 @@ class GameView(ctx: Context) : View(ctx) {
             20f
         )
 
-        drawButton(
+        button(
             canvas,
             RectF(
                 w / 2f + 10f,
@@ -164,7 +163,7 @@ class GameView(ctx: Context) : View(ctx) {
                 395f
             ),
             Color.rgb(30, 30, 52),
-            "SETTINGS",
+            "HEROES",
             17f
         )
 
@@ -180,6 +179,10 @@ class GameView(ctx: Context) : View(ctx) {
     }
 
     private fun drawLevels(canvas: Canvas) {
+        val h = height.toFloat()
+
+        canvas.drawColor(Color.rgb(8, 8, 18))
+
         drawText(
             canvas,
             "SELECT LEVEL",
@@ -201,23 +204,21 @@ class GameView(ctx: Context) : View(ctx) {
         val unlocked = prefs.getInt("unlocked", 1)
 
         for (i in 0 until 25) {
-
             val column = i % 5
             val row = i / 5
 
             val x = 40f + column * 145f
             val y = 145f + row * 72f
 
-            val isUnlocked = i + 1 <= unlocked
+            val available = i + 1 <= unlocked
 
-            val color =
-                if (isUnlocked) {
-                    Color.rgb(28, 28, 48)
-                } else {
-                    Color.rgb(17, 17, 28)
-                }
+            val color = if (available) {
+                Color.rgb(28, 28, 48)
+            } else {
+                Color.rgb(17, 17, 28)
+            }
 
-            drawButton(
+            button(
                 canvas,
                 RectF(
                     x,
@@ -235,13 +236,16 @@ class GameView(ctx: Context) : View(ctx) {
             canvas,
             "← BACK",
             40f,
-            height.toFloat() - 25f,
+            h - 25f,
             17f,
             Color.rgb(170, 170, 190)
         )
     }
 
     private fun drawCharacters(canvas: Canvas) {
+        val h = height.toFloat()
+
+        canvas.drawColor(Color.rgb(8, 8, 18))
 
         drawText(
             canvas,
@@ -253,7 +257,6 @@ class GameView(ctx: Context) : View(ctx) {
         )
 
         for (i in names.indices) {
-
             val x = 45f + (i % 3) * 235f
             val y = 105f + (i / 3) * 155f
 
@@ -306,19 +309,18 @@ class GameView(ctx: Context) : View(ctx) {
             canvas,
             "← BACK",
             40f,
-            height.toFloat() - 25f,
+            h - 25f,
             17f,
             Color.rgb(170, 170, 190)
         )
     }
 
     private fun setupLevel() {
-
         platforms.clear()
         spikes.clear()
 
-        val h = height.toFloat()
         val w = width.toFloat()
+        val h = height.toFloat()
 
         platforms.add(
             RectF(
@@ -333,30 +335,23 @@ class GameView(ctx: Context) : View(ctx) {
 
         var x = 180f
 
-        val gap =
-            38f + min(
-                55f,
-                difficulty * 0.45f
-            )
+        val gap = 38f + min(
+            55f,
+            difficulty * 0.45f
+        )
 
-        val count =
-            8 + min(
-                8,
-                difficulty / 7
-            )
+        val count = 8 + min(
+            8,
+            difficulty / 7
+        )
 
         for (i in 0 until count) {
+            val y = h - 115f - (i % 3) * 35f
 
-            val y =
-                h - 115f -
-                (i % 3) * 35f
-
-            val platformWidth =
-                max(
-                    60f,
-                    130f -
-                    difficulty * 0.45f
-                )
+            val platformWidth = max(
+                60f,
+                130f - difficulty * 0.45f
+            )
 
             platforms.add(
                 RectF(
@@ -368,7 +363,6 @@ class GameView(ctx: Context) : View(ctx) {
             )
 
             if (i % 2 == 1 || difficulty > 12) {
-
                 spikes.add(
                     RectF(
                         x + platformWidth / 2f - 15f,
@@ -391,12 +385,10 @@ class GameView(ctx: Context) : View(ctx) {
         velocityY = 0f
 
         initialized = true
-        gameRunning = true
     }
 
     private fun drawGame(canvas: Canvas) {
-
-        if (!initialized || !gameRunning) {
+        if (!initialized) {
             setupLevel()
         }
 
@@ -420,12 +412,7 @@ class GameView(ctx: Context) : View(ctx) {
         )
 
         for (platform in platforms) {
-
-            paint.color = Color.rgb(
-                45,
-                45,
-                70
-            )
+            paint.color = Color.rgb(45, 45, 70)
 
             canvas.drawRoundRect(
                 platform,
@@ -436,12 +423,7 @@ class GameView(ctx: Context) : View(ctx) {
         }
 
         for (spike in spikes) {
-
-            paint.color = Color.rgb(
-                255,
-                70,
-                100
-            )
+            paint.color = Color.rgb(255, 70, 100)
 
             val path = Path()
 
@@ -475,11 +457,7 @@ class GameView(ctx: Context) : View(ctx) {
             h - 70f
         )
 
-        paint.color = Color.rgb(
-            80,
-            220,
-            140
-        )
+        paint.color = Color.rgb(80, 220, 140)
 
         canvas.drawRoundRect(
             goal,
@@ -519,7 +497,7 @@ class GameView(ctx: Context) : View(ctx) {
             true
         )
 
-        drawButton(
+        button(
             canvas,
             RectF(
                 25f,
@@ -537,7 +515,7 @@ class GameView(ctx: Context) : View(ctx) {
             14f
         )
 
-        drawButton(
+        button(
             canvas,
             RectF(
                 w - 155f,
@@ -566,21 +544,196 @@ class GameView(ctx: Context) : View(ctx) {
     }
 
     private fun updatePhysics() {
-
         val h = height.toFloat()
         val w = width.toFloat()
 
         velocityY += 0.8f
         playerY += velocityY
 
-        if (playerY > h + 80f ||
-            playerX < -50f
-        ) {
-            die()
+        if (playerY > h + 80f || playerX < -50f) {
+            resetPlayer()
             return
         }
 
         for (platform in platforms) {
-
             val touching =
-                playerX > platform.left - 18
+                playerX > platform.left - 18f &&
+                playerX < platform.right + 18f &&
+                playerY + 20f >= platform.top &&
+                playerY + 20f <= platform.top + 28f &&
+                velocityY >= 0f
+
+            if (touching) {
+                playerY = platform.top - 20f
+                velocityY = 0f
+            }
+        }
+
+        for (spike in spikes) {
+            val hit =
+                abs(playerX - spike.centerX()) < 22f &&
+                playerY > spike.top - 25f &&
+                playerY < spike.bottom + 15f
+
+            if (hit) {
+                resetPlayer()
+                return
+            }
+        }
+
+        if (
+            playerX > w - 80f &&
+            playerY > h - 190f
+        ) {
+            nextLevel()
+        }
+    }
+
+    private fun resetPlayer() {
+        deaths++
+
+        playerX = 80f
+        playerY = height.toFloat() - 120f
+        velocityY = 0f
+    }
+
+    private fun nextLevel() {
+        if (level < 100) {
+            val unlocked = prefs.getInt("unlocked", 1)
+
+            if (level >= unlocked) {
+                prefs.edit()
+                    .putInt(
+                        "unlocked",
+                        min(100, level + 1)
+                    )
+                    .apply()
+            }
+
+            level++
+        }
+
+        initialized = false
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        val x = event.x
+        val y = event.y
+
+        if (event.action == MotionEvent.ACTION_DOWN) {
+
+            when (screen) {
+
+                0 -> {
+                    if (
+                        y >= 210f &&
+                        y <= 315f
+                    ) {
+                        screen = 1
+                    } else if (
+                        y >= 320f &&
+                        y <= 410f &&
+                        x > width / 2f
+                    ) {
+                        screen = 2
+                    }
+                }
+
+                1 -> {
+                    if (y > height.toFloat() - 70f) {
+                        screen = 0
+                    } else {
+                        val column =
+                            ((x - 40f) / 145f).toInt()
+
+                        val row =
+                            ((y - 145f) / 72f).toInt()
+
+                        if (
+                            column in 0..4 &&
+                            row in 0..4
+                        ) {
+                            val selected =
+                                row * 5 + column + 1
+
+                            val unlocked =
+                                prefs.getInt(
+                                    "unlocked",
+                                    1
+                                )
+
+                            if (selected <= unlocked) {
+                                level = selected
+                                initialized = false
+                                screen = 3
+                            }
+                        }
+                    }
+                }
+
+                2 -> {
+                    if (y > height.toFloat() - 70f) {
+                        screen = 0
+                    } else {
+                        val column =
+                            ((x - 45f) / 235f).toInt()
+
+                        val row =
+                            ((y - 105f) / 155f).toInt()
+
+                        val selected =
+                            row * 3 + column
+
+                        if (selected in names.indices) {
+                            val available =
+                                selected == 0 ||
+                                prefs.getBoolean(
+                                    "hero$selected",
+                                    false
+                                )
+
+                            if (available) {
+                                character = selected
+                            }
+                        }
+                    }
+                }
+
+                3 -> {
+                    if (
+                        x > width.toFloat() - 180f &&
+                        y > height.toFloat() - 120f
+                    ) {
+                        if (velocityY == 0f) {
+                            velocityY = -14f
+                        }
+                    } else if (
+                        x < 170f &&
+                        y > height.toFloat() - 100f
+                    ) {
+                        playerX += 35f
+                    } else if (
+                        x > 170f &&
+                        y > height.toFloat() - 120f
+                    ) {
+                        playerX += 22f
+                    }
+                }
+            }
+        }
+
+        if (
+            event.action == MotionEvent.ACTION_MOVE &&
+            screen == 3 &&
+            y > height.toFloat() - 110f
+        ) {
+            if (x < 180f) {
+                playerX -= 8f
+            } else {
+                playerX += 8f
+            }
+        }
+
+        return true
+    }
+}
