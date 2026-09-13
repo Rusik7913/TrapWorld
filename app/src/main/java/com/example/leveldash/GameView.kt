@@ -1,30 +1,37 @@
-```kotlin
 package com.example.leveldash
 
 import android.content.Context
 import android.graphics.*
 import android.view.MotionEvent
 import android.view.View
-import kotlin.math.*
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 class GameView(ctx: Context) : View(ctx) {
-    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val prefs = ctx.getSharedPreferences("save", 0)
+
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     private var screen = 0
     private var level = 1
     private var character = 0
     private var deaths = 0
-    private var won = false
 
-    private var px = 100f
-    private var py = 0f
-    private var vy = 0f
-    private var moving = false
-    private var jumpHeld = false
-    private var t = 0f
+    private var playerX = 100f
+    private var playerY = 0f
+    private var velocityY = 0f
 
-    private val names = arrayOf("NOVA", "BOLT", "MINT", "SHADOW", "ROBO", "FLARE")
+    private var initialized = false
+    private var gameRunning = false
+
+    private val names = arrayOf(
+        "NOVA",
+        "BOLT",
+        "MINT",
+        "SHADOW",
+        "ROBO",
+        "FLARE"
+    )
 
     private val colors = intArrayOf(
         Color.rgb(124, 77, 255),
@@ -38,78 +45,132 @@ class GameView(ctx: Context) : View(ctx) {
     private val platforms = mutableListOf<RectF>()
     private val spikes = mutableListOf<RectF>()
 
-    override fun onDraw(c: Canvas) {
-        super.onDraw(c)
+    private val prefs =
+        ctx.getSharedPreferences("save", Context.MODE_PRIVATE)
 
-        p.style = Paint.Style.FILL
-        c.drawColor(Color.rgb(8, 8, 18))
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+
+        canvas.drawColor(Color.rgb(8, 8, 18))
 
         when (screen) {
-            0 -> menu(c)
-            1 -> levels(c)
-            2 -> characters(c)
-            3 -> game(c)
+            0 -> drawMenu(canvas)
+            1 -> drawLevels(canvas)
+            2 -> drawCharacters(canvas)
+            3 -> drawGame(canvas)
+        }
+
+        if (screen == 3) {
+            postInvalidateDelayed(16)
         }
     }
 
-    private fun text(
-        c: Canvas,
-        s: String,
+    private fun drawText(
+        canvas: Canvas,
+        text: String,
         x: Float,
         y: Float,
         size: Float,
         color: Int,
         center: Boolean = false
     ) {
-        p.typeface = Typeface.create("sans", Typeface.BOLD)
-        p.textSize = size
-        p.color = color
-        p.textAlign = if (center) Paint.Align.CENTER else Paint.Align.LEFT
-        c.drawText(s, x, y, p)
+        paint.style = Paint.Style.FILL
+        paint.color = color
+        paint.textSize = size
+        paint.typeface = Typeface.DEFAULT_BOLD
+        paint.textAlign =
+            if (center) Paint.Align.CENTER else Paint.Align.LEFT
+
+        canvas.drawText(text, x, y, paint)
     }
 
-    private fun round(
-        c: Canvas,
-        r: RectF,
+    private fun drawButton(
+        canvas: Canvas,
+        rect: RectF,
         color: Int,
-        rad: Float = 22f
+        text: String,
+        textSize: Float
     ) {
-        p.color = color
-        c.drawRoundRect(r, rad, rad, p)
+        paint.style = Paint.Style.FILL
+        paint.color = color
+        canvas.drawRoundRect(rect, 18f, 18f, paint)
+
+        drawText(
+            canvas,
+            text,
+            rect.centerX(),
+            rect.centerY() + textSize / 3f,
+            textSize,
+            Color.WHITE,
+            true
+        )
     }
 
-    private fun menu(c: Canvas) {
+    private fun drawMenu(canvas: Canvas) {
         val w = width.toFloat()
-        val h = height.toFloat()
 
-        text(c, "LEVEL DASH", w / 2f, 120f, 54f, Color.WHITE, true)
-        text(c, "TRAPS AREN'T FAIR.", w / 2f, 158f, 18f, Color.rgb(170, 170, 190), true)
-
-        round(
-            c,
-            RectF(w / 2f - 180f, 220f, w / 2f + 180f, 300f),
-            Color.rgb(124, 77, 255)
-        )
-        text(c, "PLAY", w / 2f, 272f, 30f, Color.WHITE, true)
-
-        round(
-            c,
-            RectF(w / 2f - 180f, 325f, w / 2f - 10f, 395f),
-            Color.rgb(30, 30, 52)
+        drawText(
+            canvas,
+            "LEVEL DASH",
+            w / 2f,
+            120f,
+            52f,
+            Color.WHITE,
+            true
         )
 
-        round(
-            c,
-            RectF(w / 2f + 10f, 325f, w / 2f + 180f, 395f),
-            Color.rgb(30, 30, 52)
+        drawText(
+            canvas,
+            "TRAPS AREN'T FAIR",
+            w / 2f,
+            158f,
+            18f,
+            Color.rgb(170, 170, 190),
+            true
         )
 
-        text(c, "SKINS", w / 2f - 95f, 370f, 21f, Color.WHITE, true)
-        text(c, "SETTINGS", w / 2f + 95f, 370f, 18f, Color.WHITE, true)
+        drawButton(
+            canvas,
+            RectF(
+                w / 2f - 180f,
+                220f,
+                w / 2f + 180f,
+                300f
+            ),
+            Color.rgb(124, 77, 255),
+            "PLAY",
+            30f
+        )
 
-        text(
-            c,
-            "100 LEVELS  •  6 HEROES  •  5 WORLDS",
+        drawButton(
+            canvas,
+            RectF(
+                w / 2f - 180f,
+                325f,
+                w / 2f - 10f,
+                395f
+            ),
+            Color.rgb(30, 30, 52),
+            "SKINS",
+            20f
+        )
+
+        drawButton(
+            canvas,
+            RectF(
+                w / 2f + 10f,
+                325f,
+                w / 2f + 180f,
+                395f
+            ),
+            Color.rgb(30, 30, 52),
+            "SETTINGS",
+            17f
+        )
+
+        drawText(
+            canvas,
+            "100 LEVELS • 6 HEROES • 5 WORLDS",
             w / 2f,
             450f,
             15f,
@@ -118,47 +179,60 @@ class GameView(ctx: Context) : View(ctx) {
         )
     }
 
-    private fun levels(c: Canvas) {
-        val w = width.toFloat()
+    private fun drawLevels(canvas: Canvas) {
+        drawText(
+            canvas,
+            "SELECT LEVEL",
+            40f,
+            65f,
+            30f,
+            Color.WHITE
+        )
 
-        text(c, "SELECT LEVEL", 40f, 65f, 30f, Color.WHITE)
-        text(c, "WORLD 1  —  TRAINING", 40f, 105f, 16f, Color.rgb(160, 160, 180))
+        drawText(
+            canvas,
+            "WORLD 1 — TRAINING",
+            40f,
+            105f,
+            16f,
+            Color.rgb(160, 160, 180)
+        )
 
-        val start = 145f
+        val unlocked = prefs.getInt("unlocked", 1)
 
         for (i in 0 until 25) {
-            val col = i % 5
+
+            val column = i % 5
             val row = i / 5
 
-            val x = 40f + col * 145f
-            val y = start + row * 72f
+            val x = 40f + column * 145f
+            val y = 145f + row * 72f
 
-            val unlocked = i + 1 <= max(
-                1,
-                prefs.getInt("unlocked", 1)
-            )
+            val isUnlocked = i + 1 <= unlocked
 
-            round(
-                c,
-                RectF(x, y, x + 115f, y + 52f),
-                if (unlocked) Color.rgb(28, 28, 48)
-                else Color.rgb(17, 17, 28),
-                15f
-            )
+            val color =
+                if (isUnlocked) {
+                    Color.rgb(28, 28, 48)
+                } else {
+                    Color.rgb(17, 17, 28)
+                }
 
-            text(
-                c,
-                "${i + 1}",
-                x + 57f,
-                y + 34f,
-                20f,
-                if (unlocked) Color.WHITE else Color.DKGRAY,
-                true
+            drawButton(
+                canvas,
+                RectF(
+                    x,
+                    y,
+                    x + 115f,
+                    y + 52f
+                ),
+                color,
+                (i + 1).toString(),
+                20f
             )
         }
 
-        text(
-            c,
+        drawText(
+            canvas,
             "← BACK",
             40f,
             height.toFloat() - 25f,
@@ -167,33 +241,60 @@ class GameView(ctx: Context) : View(ctx) {
         )
     }
 
-    private fun characters(c: Canvas) {
-        val w = width.toFloat()
+    private fun drawCharacters(canvas: Canvas) {
 
-        text(c, "HEROES", 40f, 65f, 30f, Color.WHITE)
+        drawText(
+            canvas,
+            "HEROES",
+            40f,
+            65f,
+            30f,
+            Color.WHITE
+        )
 
         for (i in names.indices) {
+
             val x = 45f + (i % 3) * 235f
             val y = 105f + (i / 3) * 155f
 
-            round(
-                c,
-                RectF(x, y, x + 205f, y + 125f),
-                Color.rgb(25, 25, 45),
-                18f
+            paint.color = Color.rgb(25, 25, 45)
+
+            canvas.drawRoundRect(
+                RectF(
+                    x,
+                    y,
+                    x + 205f,
+                    y + 125f
+                ),
+                18f,
+                18f,
+                paint
             )
 
-            p.color = colors[i]
-            c.drawCircle(x + 50f, y + 62f, 27f, p)
+            paint.color = colors[i]
 
-            text(c, names[i], x + 92f, y + 55f, 20f, Color.WHITE)
+            canvas.drawCircle(
+                x + 50f,
+                y + 62f,
+                27f,
+                paint
+            )
 
-            text(
-                c,
-                if (i == 0 || prefs.getBoolean("hero$i", false))
-                    "AVAILABLE"
-                else
-                    "LOCKED",
+            drawText(
+                canvas,
+                names[i],
+                x + 92f,
+                y + 55f,
+                20f,
+                Color.WHITE
+            )
+
+            val available =
+                i == 0 || prefs.getBoolean("hero$i", false)
+
+            drawText(
+                canvas,
+                if (available) "AVAILABLE" else "LOCKED",
                 x + 92f,
                 y + 82f,
                 13f,
@@ -201,8 +302,8 @@ class GameView(ctx: Context) : View(ctx) {
             )
         }
 
-        text(
-            c,
+        drawText(
+            canvas,
             "← BACK",
             40f,
             height.toFloat() - 25f,
@@ -212,85 +313,97 @@ class GameView(ctx: Context) : View(ctx) {
     }
 
     private fun setupLevel() {
+
         platforms.clear()
         spikes.clear()
 
         val h = height.toFloat()
+        val w = width.toFloat()
 
-        platforms += RectF(
-            0f,
-            h - 70f,
-            width.toFloat(),
-            h
+        platforms.add(
+            RectF(
+                0f,
+                h - 70f,
+                w,
+                h
+            )
         )
 
-        val d = min(level, 100)
+        val difficulty = min(level, 100)
 
         var x = 180f
 
-        val gap = 38f + min(
-            55f,
-            d * 0.45f
-        )
+        val gap =
+            38f + min(
+                55f,
+                difficulty * 0.45f
+            )
 
-        val count = 8 + min(
-            8,
-            d / 7
-        )
+        val count =
+            8 + min(
+                8,
+                difficulty / 7
+            )
 
         for (i in 0 until count) {
-            val y = h - 115f - (i % 3) * 35f
 
-            // ВАЖНО: 0f вместо 0, чтобы Kotlin получил Float
-            val pw = 130f - max(
-                0f,
-                d * 0.45f
+            val y =
+                h - 115f -
+                (i % 3) * 35f
+
+            val platformWidth =
+                max(
+                    60f,
+                    130f -
+                    difficulty * 0.45f
+                )
+
+            platforms.add(
+                RectF(
+                    x,
+                    y,
+                    x + platformWidth,
+                    y + 22f
+                )
             )
 
-            platforms += RectF(
-                x,
-                y,
-                x + pw,
-                y + 22f
-            )
+            if (i % 2 == 1 || difficulty > 12) {
 
-            if (i % 2 == 1 || d > 12) {
-                spikes += RectF(
-                    x + pw / 2f - 15f,
-                    y - 20f,
-                    x + pw / 2f + 15f,
-                    y
+                spikes.add(
+                    RectF(
+                        x + platformWidth / 2f - 15f,
+                        y - 20f,
+                        x + platformWidth / 2f + 15f,
+                        y
+                    )
                 )
             }
 
-            x += pw + gap
+            x += platformWidth + gap
 
-            if (x > width.toFloat() + 100f) {
+            if (x > w + 100f) {
                 break
             }
         }
 
-        px = 80f
-        py = h - 120f
-        vy = 0f
-        moving = false
-        won = false
+        playerX = 80f
+        playerY = h - 120f
+        velocityY = 0f
+
+        initialized = true
+        gameRunning = true
     }
 
-    private fun game(c: Canvas) {
-        if (!moving) {
+    private fun drawGame(canvas: Canvas) {
+
+        if (!initialized || !gameRunning) {
             setupLevel()
         }
-
-        moving = true
-        t += 1f
 
         val w = width.toFloat()
         val h = height.toFloat()
 
-        val world = (level - 1) / 20
-
-        p.color = when (world) {
+        paint.color = when ((level - 1) / 20) {
             0 -> Color.rgb(12, 12, 28)
             1 -> Color.rgb(8, 20, 28)
             2 -> Color.rgb(25, 12, 25)
@@ -298,26 +411,63 @@ class GameView(ctx: Context) : View(ctx) {
             else -> Color.rgb(10, 8, 20)
         }
 
-        c.drawRect(0f, 0f, w, h, p)
+        canvas.drawRect(
+            0f,
+            0f,
+            w,
+            h,
+            paint
+        )
 
-        for (r in platforms) {
-            round(c, r, Color.rgb(45, 45, 70), 7f)
+        for (platform in platforms) {
+
+            paint.color = Color.rgb(
+                45,
+                45,
+                70
+            )
+
+            canvas.drawRoundRect(
+                platform,
+                7f,
+                7f,
+                paint
+            )
         }
 
-        for (s in spikes) {
-            p.color = Color.rgb(255, 70, 100)
+        for (spike in spikes) {
+
+            paint.color = Color.rgb(
+                255,
+                70,
+                100
+            )
 
             val path = Path()
 
-            path.moveTo(s.centerX(), s.bottom)
-            path.lineTo(s.left, s.top)
-            path.lineTo(s.right, s.top)
+            path.moveTo(
+                spike.centerX(),
+                spike.bottom
+            )
+
+            path.lineTo(
+                spike.left,
+                spike.top
+            )
+
+            path.lineTo(
+                spike.right,
+                spike.top
+            )
+
             path.close()
 
-            c.drawPath(path, p)
+            canvas.drawPath(
+                path,
+                paint
+            )
         }
 
-        // goal
         val goal = RectF(
             w - 75f,
             h - 145f,
@@ -325,15 +475,21 @@ class GameView(ctx: Context) : View(ctx) {
             h - 70f
         )
 
-        round(
-            c,
-            goal,
-            Color.rgb(80, 220, 140),
-            8f
+        paint.color = Color.rgb(
+            80,
+            220,
+            140
         )
 
-        text(
-            c,
+        canvas.drawRoundRect(
+            goal,
+            8f,
+            8f,
+            paint
+        )
+
+        drawText(
+            canvas,
             "EXIT",
             w - 52f,
             h - 155f,
@@ -342,104 +498,66 @@ class GameView(ctx: Context) : View(ctx) {
             true
         )
 
-        // character
-        p.color = colors[character]
-        c.drawCircle(px, py, 20f, p)
+        updatePhysics()
 
-        text(
-            c,
+        paint.color = colors[character]
+
+        canvas.drawCircle(
+            playerX,
+            playerY,
+            20f,
+            paint
+        )
+
+        drawText(
+            canvas,
             names[character],
-            px,
-            py - 28f,
+            playerX,
+            playerY - 28f,
             11f,
             Color.WHITE,
             true
         )
 
-        // physics
-        vy += 0.8f
-        py += vy
-
-        if (py > h + 80f || px < -50f) {
-            lose()
-        }
-
-        for (r in platforms) {
-            if (
-                px > r.left - 18f &&
-                px < r.right + 18f &&
-                py + 20f >= r.top &&
-                py + 20f <= r.top + 28f &&
-                vy >= 0f
-            ) {
-                py = r.top - 20f
-                vy = 0f
-            }
-        }
-
-        for (s in spikes) {
-            if (
-                abs(px - s.centerX()) < 22f &&
-                py > s.top - 25f &&
-                py < s.bottom + 15f
-            ) {
-                lose()
-            }
-        }
-
-        if (px > w - 80f && py > h - 190f) {
-            complete()
-        }
-
-        // controls
-        round(
-            c,
+        drawButton(
+            canvas,
             RectF(
                 25f,
                 h - 65f,
                 145f,
                 h - 20f
             ),
-            Color.argb(90, 255, 255, 255),
+            Color.argb(
+                90,
+                255,
+                255,
+                255
+            ),
+            "MOVE",
             14f
         )
 
-        text(
-            c,
-            "MOVE",
-            85f,
-            h - 35f,
-            14f,
-            Color.WHITE,
-            true
-        )
-
-        round(
-            c,
+        drawButton(
+            canvas,
             RectF(
                 w - 155f,
                 h - 85f,
                 w - 25f,
                 h - 20f
             ),
-            Color.argb(90, 124, 77, 255),
-            18f
-        )
-
-        text(
-            c,
+            Color.argb(
+                90,
+                124,
+                77,
+                255
+            ),
             "JUMP",
-            w - 90f,
-            h - 45f,
-            16f,
-            Color.WHITE,
-            true
+            16f
         )
 
-        // ВАЖНО: 25f и 35f вместо Int
-        text(
-            c,
-            "LEVEL $level  •  DEATHS $deaths",
+        drawText(
+            canvas,
+            "LEVEL $level • DEATHS $deaths",
             25f,
             35f,
             15f,
@@ -447,34 +565,22 @@ class GameView(ctx: Context) : View(ctx) {
         )
     }
 
-    private fun lose() {
-        deaths++
-        px = 80f
-        py = height.toFloat() - 120f
-        vy = 0f
-    }
+    private fun updatePhysics() {
 
-    private fun complete() {
-        if (won) return
+        val h = height.toFloat()
+        val w = width.toFloat()
 
-        won = true
+        velocityY += 0.8f
+        playerY += velocityY
 
-        val u = prefs.getInt("unlocked", 1)
-
-        prefs.edit()
-            .putInt(
-                "unlocked",
-                max(u, level + 1)
-            )
-            .apply()
-
-        if (level < 100) {
-            level++
+        if (playerY > h + 80f ||
+            playerX < -50f
+        ) {
+            die()
+            return
         }
 
-        moving = false
-    }
+        for (platform in platforms) {
 
-    override fun onTouchEvent(e: MotionEvent): Boolean {
-        val x = e
-```
+            val touching =
+                playerX > platform.left - 18
